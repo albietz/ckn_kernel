@@ -14,6 +14,12 @@ from libcpp.vector cimport vector
 
 np.import_array()
 
+to_pool_type = {
+    'gaussian': 0,
+    'strided': 1,
+    'average': 2,
+}
+
 cdef extern from "CKNKernelMatrix.h":
     Double computeKernel[Double](const Double* const im1,
                                  const Double* const im2,
@@ -33,8 +39,9 @@ def compute_kernel(im1, im2, model):
     cdef vector[size_t] patch_sizes = [l['npatch'] for l in model]
     cdef vector[size_t] subs = [l['subsampling'] for l in model]
     cdef vector[double] sigmas = [l['sigma'] for l in model]
+    cdef vector[int] pools = [to_pool_type[l.get('pooling', 'gaussian')] for l in model]
     return computeKernel[double](&x1[0], &x2[0], h, w, c,
-                                 patch_sizes, subs, sigmas)
+                                 patch_sizes, subs, sigmas, pools)
 
 
 @cython.boundscheck(False)
@@ -47,21 +54,25 @@ def compute_dist_to_ref(im_ref, ims, model):
     cdef vector[size_t] patch_sizes = [l['npatch'] for l in model]
     cdef vector[size_t] subs = [l['subsampling'] for l in model]
     cdef vector[double] sigmas = [l['sigma'] for l in model]
+    cdef vector[int] pools = [to_pool_type[l.get('pooling', 'gaussian')] for l in model]
 
     cdef double[::1] x_ref = im_ref.reshape(-1)
     cdef double[:,::1] x = ims.reshape(N, -1)
-    k00 = computeKernel[double](&x_ref[0], &x_ref[0], h, w, c,
-                                 patch_sizes, subs, sigmas)
 
+    cdef double k00
     cdef double[:] kxy = np.zeros(N)
     cdef double[:] kyy = np.zeros(N)
 
-    cdef int i
-    for i in prange(N, nogil=True):
-    # for i in range(N):
-        kxy[i] = computeKernel[double](&x_ref[0], &x[i,0], h, w, c,
-                                     patch_sizes, subs, sigmas)
-        kyy[i] = computeKernel[double](&x[i,0], &x[i,0], h, w, c,
-                                     patch_sizes, subs, sigmas)
+    cdef int j
+    for j in prange(2 * N + 1, nogil=True):
+        if j == 2 * N:
+            k00 = computeKernel[double](&x_ref[0], &x_ref[0], h, w, c,
+                                         patch_sizes, subs, sigmas, pools)
+        elif j % 2 == 0:
+            kxy[j / 2] = computeKernel[double](&x_ref[0], &x[j / 2,0], h, w, c,
+                                         patch_sizes, subs, sigmas, pools)
+        else:
+            kyy[j / 2] = computeKernel[double](&x[j / 2,0], &x[j / 2,0], h, w, c,
+                                         patch_sizes, subs, sigmas, pools)
 
     return k00, np.asarray(kxy), np.asarray(kyy)

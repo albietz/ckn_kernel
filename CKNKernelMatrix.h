@@ -57,10 +57,18 @@ namespace {
 static const bool useDP = true;
 }
 
+enum PoolType {
+  GAUSSIAN = 0,
+  STRIDED,
+  AVERAGE
+};
+
 struct LayerParams {
   size_t patchSize;
   size_t subsampling;
   double sigma;
+  bool zeroPad;
+  PoolType poolType;
 };
 
 template <typename Double>
@@ -81,12 +89,17 @@ class CKNKernelMatrix {
         dims.wi = layerDims_[l-1].wpool;
       }
       const size_t patch = layers_[l].patchSize;
-      CHECK_GE(dims.hi, patch);
-      dims.hconv = dims.hi - patch + 1;
-      dims.wconv = dims.wi - patch + 1;
+      if (layers_[l].zeroPad) {
+        dims.hconv = dims.hi;
+        dims.wconv = dims.wi;
+      } else {
+        CHECK_GE(dims.hi, patch);
+        dims.hconv = dims.hi - patch + 1;
+        dims.wconv = dims.wi - patch + 1;
+      }
       const size_t sub = layers_[l].subsampling;
       dims.poolSize = 2 * sub + 1;
-      poolFilter_.emplace_back(makeFilter(dims.poolSize));
+      poolFilter_.emplace_back(makeFilter(dims.poolSize, layers_[l].poolType));
 
       // sample at sub * i, with i = 1..hpool
       CHECK_GE(dims.hconv, sub) << "too large subsampling";
@@ -123,7 +136,8 @@ private:
   // used for the dynamic programming maps
   enum OpType { IM12, IM1, IM2 };
 
-  std::vector<Double> makeFilter(const size_t sz) const {
+  std::vector<Double> makeFilter(const size_t sz,
+                                 const PoolType poolType = GAUSSIAN) const {
     const int sub = static_cast<int>(sz) / 2;
     const Double sigma = static_cast<Double>(sub) / std::sqrt(2.0);
     std::vector<Double> filt(sz * sz);
@@ -132,8 +146,15 @@ private:
     for (int i = -sub; i <= sub; ++i) {
       for (int j = -sub; j <= sub; ++j) {
         auto& f = filt[(sub + i) * sz + (sub + j)];
-        f = std::exp(-(i * i + j * j) / (2 * sigma * sigma));
-        // f = (i == 0 && j == 0) ? 1.0 : 0.0;
+        if (poolType == GAUSSIAN) {
+          f = std::exp(-(i * i + j * j) / (2 * sigma * sigma));
+        } else if (poolType == AVERAGE) {
+          f = 1.0;
+        } else if (poolType == STRIDED) {
+          f = (i == 0 && j == 0) ? 1.0 : 0.0;
+        } else {
+          LOG(FATAL) << "bad pool type";
+        }
         sum += f;
       }
     }
@@ -183,9 +204,6 @@ private:
       for (size_t c = 0; c < c_; ++c) {
         val += im1[i1 * (w_ * c_) + j1 * c_ + c] * im2[i2 * (w_ * c_) + j2 * c_ + c];
       }
-    if (pos != poolMap_.end() && std::abs(pos->second - val) > 1e-5) {
-      LOG_EVERY_N(ERROR, 10000) << pos->second << " vs " << val << ": " << static_cast<int>(im1Idx) << static_cast<int>(im2Idx) << l;
-    }
       if (useDP) {
         return poolMap_[key] = val;
       } else {
@@ -277,13 +295,20 @@ private:
       return pos->second;
     }
 
-    const size_t sz = layers_[l].patchSize;
+    const int sz = layers_[l].patchSize;
+    const int start = layers_[l].zeroPad ? -(sz - 1) / 2 : 0;
+    const size_t hbelow = l >= 1 ? layerDims_[l-1].hpool : h_;
+    const size_t wbelow = l >= 1 ? layerDims_[l-1].wpool : w_;
     Double val = 0.0;
-    for (size_t i = 0; i < sz; ++i) {
-      for (size_t j = 0; j < sz; ++j) {
-        val += pool(ims, im1Idx, im2Idx, l - 1, i1 + i, j1 + j, i2 + i, j2 + j);
+    for (int i = start; i < start + sz; ++i) {
+      for (int j = start; j < start + sz; ++j) {
+        if (i1 + i >= 0 && i1 + i < hbelow && j1 + j >= 0 && j1 + j < wbelow
+            && i2 + i >= 0 && i2 + i < hbelow && j2 + j >= 0 && j2 + j < wbelow) {
+          val += pool(ims, im1Idx, im2Idx, l - 1, i1 + i, j1 + j, i2 + i, j2 + j);
+        }
       }
     }
+    val /= (sz * sz);
 
     if (pos != prodMap_.end() && std::abs(pos->second - val) > 1e-5) {
       LOG_EVERY_N(ERROR, 10000) << pos->second << " vs " << val << ": " << im1Idx << im2Idx << l;
@@ -343,13 +368,12 @@ Double computeKernel(const Double *const im1, const Double *const im2,
                      const size_t h, const size_t w, const size_t c,
                      const std::vector<size_t>& patchSizes,
                      const std::vector<size_t>& subs,
-                     const std::vector<double>& sigmas) {
+                     const std::vector<double>& sigmas,
+                     const std::vector<int>& pools) {
   std::vector<LayerParams> layers;
   for (size_t i = 0; i < patchSizes.size(); ++i) {
-    layers.push_back({patchSizes[i], subs[i], sigmas[i]});
+    layers.push_back({patchSizes[i], subs[i], sigmas[i], /*zeroPad=*/true, static_cast<PoolType>(pools[i])});
   }
-  // layers.push_back({3, 2, 0.65});
-  // layers.push_back({3, 5, 0.65});
 
   CKNKernelMatrix<Double> kernel(layers, h, w, c);
   return kernel.computeKernel(im1, im2);
