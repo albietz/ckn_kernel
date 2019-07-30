@@ -55,6 +55,8 @@ struct hash<std::tuple<TT...>> {
 
 namespace {
 static const bool useDP = true;
+static const double PI = 3.141592653589793238463;
+
 }
 
 enum PoolType {
@@ -63,10 +65,16 @@ enum PoolType {
   AVERAGE
 };
 
+enum KernelType {
+  EXP = 0,
+  RELU
+};
+
 struct LayerParams {
   size_t patchSize;
   size_t subsampling;
-  double sigma;
+  KernelType kernelType;
+  double kernelParam; // sigma for EXP kernel
   bool zeroPad;
   PoolType poolType;
 };
@@ -132,10 +140,6 @@ class CKNKernelMatrix {
   }
 
 private:
-  // whether to compute across images or on a single image
-  // used for the dynamic programming maps
-  enum OpType { IM12, IM1, IM2 };
-
   std::vector<Double> makeFilter(const size_t sz,
                                  const PoolType poolType = GAUSSIAN) const {
     const int sub = static_cast<int>(sz) / 2;
@@ -268,7 +272,7 @@ private:
     if (norm1 > 1e-6 && norm2 > 1e-6) {
       cosine = prod(ims, im1Idx, im2Idx, l, i1, j1, i2, j2) / norm1 / norm2;
     }
-    Double val = norm1 * norm2 * kappa(cosine, layers_[l].sigma);
+    Double val = norm1 * norm2 * kappa(cosine, layers_[l].kernelType, layers_[l].kernelParam);
 
     if (pos != convMap_.end() && std::abs(pos->second - val) > 1e-5) {
       LOG_EVERY_N(ERROR, 10000) << pos->second << " vs " << val << ": " << im1Idx << im2Idx << l;
@@ -320,8 +324,22 @@ private:
     }
   }
 
-  Double kappa(const Double cosine, const Double sigma) const {
-    return std::exp((cosine - 1) / (sigma * sigma));
+  Double kappa(const Double cosine,
+               const KernelType kernelType = EXP,
+               const Double kernelParam = 1.0) const {
+    if (kernelType == EXP) {
+      const auto sigma = kernelParam;
+      return std::exp((cosine - 1) / (sigma * sigma));
+    } else if (kernelType == RELU) {
+      if (cosine > 0.9999) {
+        return 1;
+      } else {
+        return (cosine * (PI - std::acos(cosine)) + std::sqrt(1. - cosine * cosine)) / PI;
+      }
+    } else {
+      LOG(ERROR) << "undefined kernel type";
+      return 0.;
+    }
   }
 
   uint64_t makeKey(const uint8_t im1Idx, const uint8_t im2Idx, const int32_t l,
@@ -355,8 +373,8 @@ private:
 
   using KeyT =
       std::tuple<uint8_t, uint8_t, int32_t, size_t, size_t, size_t, size_t>;
-  // using MapT = std::unordered_map<KeyT, Double, tuple_hash::hash<KeyT>>;
-  using MapT = std::map<KeyT, Double>;
+  using MapT = std::unordered_map<KeyT, Double, tuple_hash::hash<KeyT>>;
+  // using MapT = std::map<KeyT, Double>;
 
   MapT poolMap_;
   MapT convMap_;
@@ -368,11 +386,13 @@ Double computeKernel(const Double *const im1, const Double *const im2,
                      const size_t h, const size_t w, const size_t c,
                      const std::vector<size_t>& patchSizes,
                      const std::vector<size_t>& subs,
-                     const std::vector<double>& sigmas,
+                     const std::vector<int>& kernelTypes,
+                     const std::vector<double>& kernelParams,
                      const std::vector<int>& pools) {
   std::vector<LayerParams> layers;
   for (size_t i = 0; i < patchSizes.size(); ++i) {
-    layers.push_back({patchSizes[i], subs[i], sigmas[i], /*zeroPad=*/true, static_cast<PoolType>(pools[i])});
+    layers.push_back({patchSizes[i], subs[i], static_cast<KernelType>(kernelTypes[i]),
+                      kernelParams[i], /*zeroPad=*/true, static_cast<PoolType>(pools[i])});
   }
 
   CKNKernelMatrix<Double> kernel(layers, h, w, c);

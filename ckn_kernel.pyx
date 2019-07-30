@@ -20,6 +20,11 @@ to_pool_type = {
     'average': 2,
 }
 
+to_kernel_type = {
+    'exp': 0,
+    'relu': 1,
+}
+
 cdef extern from "CKNKernelMatrix.h":
     Double computeKernel[Double](const Double* const im1,
                                  const Double* const im2,
@@ -28,7 +33,9 @@ cdef extern from "CKNKernelMatrix.h":
                                  const size_t c,
                                  const vector[size_t]&,
                                  const vector[size_t]&,
-                                 const vector[double]&) nogil
+                                 const vector[int]&,
+                                 const vector[double]&,
+                                 const vector[int]&) nogil
 
 def compute_kernel(im1, im2, model):
     h, w, c = im1.shape
@@ -38,10 +45,11 @@ def compute_kernel(im1, im2, model):
 
     cdef vector[size_t] patch_sizes = [l['npatch'] for l in model]
     cdef vector[size_t] subs = [l['subsampling'] for l in model]
-    cdef vector[double] sigmas = [l['sigma'] for l in model]
+    cdef vector[int] kernel_types = [to_kernel_type[l.get('kernel', 'exp')] for l in model]
+    cdef vector[double] kernel_params = [l.get('sigma', 1.0) for l in model]
     cdef vector[int] pools = [to_pool_type[l.get('pooling', 'gaussian')] for l in model]
     return computeKernel[double](&x1[0], &x2[0], h, w, c,
-                                 patch_sizes, subs, sigmas, pools)
+                                 patch_sizes, subs, kernel_types, kernel_params, pools)
 
 
 @cython.boundscheck(False)
@@ -53,7 +61,8 @@ def compute_dist_to_ref(im_ref, ims, model):
 
     cdef vector[size_t] patch_sizes = [l['npatch'] for l in model]
     cdef vector[size_t] subs = [l['subsampling'] for l in model]
-    cdef vector[double] sigmas = [l['sigma'] for l in model]
+    cdef vector[int] kernel_types = [to_kernel_type[l.get('kernel', 'exp')] for l in model]
+    cdef vector[double] kernel_params = [l.get('sigma', 1.0) for l in model]
     cdef vector[int] pools = [to_pool_type[l.get('pooling', 'gaussian')] for l in model]
 
     cdef double[::1] x_ref = im_ref.reshape(-1)
@@ -67,12 +76,12 @@ def compute_dist_to_ref(im_ref, ims, model):
     for j in prange(2 * N + 1, nogil=True):
         if j == 2 * N:
             k00 = computeKernel[double](&x_ref[0], &x_ref[0], h, w, c,
-                                         patch_sizes, subs, sigmas, pools)
+                                         patch_sizes, subs, kernel_types, kernel_params, pools)
         elif j % 2 == 0:
             kxy[j / 2] = computeKernel[double](&x_ref[0], &x[j / 2,0], h, w, c,
-                                         patch_sizes, subs, sigmas, pools)
+                                         patch_sizes, subs, kernel_types, kernel_params, pools)
         else:
             kyy[j / 2] = computeKernel[double](&x[j / 2,0], &x[j / 2,0], h, w, c,
-                                         patch_sizes, subs, sigmas, pools)
+                                         patch_sizes, subs, kernel_types, kernel_params, pools)
 
     return k00, np.asarray(kxy), np.asarray(kyy)
