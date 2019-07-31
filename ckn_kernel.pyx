@@ -87,3 +87,41 @@ def compute_dist_to_ref(im_ref, ims, model, ntk=False):
                                          patch_sizes, subs, kernel_types, kernel_params, pools)
 
     return k00, np.asarray(kxy), np.asarray(kyy)
+
+
+@cython.boundscheck(False)
+def compute_kernel_matrix(ims1, ims2=None, model=None, ntk=False):
+    cdef bool sym = False
+    if ims2 is None:
+        ims2 = ims1
+        sym = True
+    cdef size_t N1, N2, h, w, c
+    N1, h, w, c = ims1.shape
+    N2 = ims2.shape[0]
+    # assert np.all(ims1.shape[1:] == ims2[1:].shape), '{} vs {}'.format(ims1.shape[1:], ims2.shape[1:])
+
+    cdef bool ntk_ = ntk
+    cdef vector[size_t] patch_sizes = [l['npatch'] for l in model]
+    cdef vector[size_t] subs = [l['subsampling'] for l in model]
+    cdef vector[int] kernel_types = [to_kernel_type[l.get('kernel', 'relu' if ntk else 'exp')] for l in model]
+    cdef vector[double] kernel_params = [l.get('sigma', 1.0) for l in model]
+    cdef vector[int] pools = [to_pool_type[l.get('pooling', 'gaussian')] for l in model]
+
+    cdef double[:,::1] x1 = ims1.reshape(N1, -1)
+    cdef double[:,::1] x2 = ims2.reshape(N2, -1)
+
+    cdef double[:,::1] k = np.zeros((N1, N2))
+
+    cdef int j, m, n
+    for j in prange(N1 * N2, nogil=True):
+        m = j // N2
+        n = j % N2
+        if not sym or m <= n:  # skip symmetric entries
+            k[m, n] = computeKernel[double](&x1[m,0], &x2[n,0], ntk_, h, w, c,
+                                         patch_sizes, subs, kernel_types, kernel_params, pools)
+
+    if sym:  # fill symmetric entries
+        for m in range(N1):
+            for n in range(m):
+                k[m, n] = k[n, m]
+    return np.asarray(k)

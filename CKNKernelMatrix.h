@@ -231,10 +231,12 @@ private:
             // LOG_EVERY_N(INFO, 10000) << filt.size() << " "
             //     << sub << " " << sz << " " << ii1 << " " << jj1
             //     << " " << ii2 << " " << jj2;
-            val += filt[(sub + ii1) * sz + (sub + jj1)] *
-                   filt[(sub + ii2) * sz + (sub + jj2)] *
-                   conv(ims, ntk, im1Idx, im2Idx, l, iconv1 + ii1, jconv1 + jj1,
-                        iconv2 + ii2, jconv2 + jj2);
+            const Double fval = filt[(sub + ii1) * sz + (sub + jj1)] *
+                                filt[(sub + ii2) * sz + (sub + jj2)];
+            if (fval > 1e-6) {
+              val += fval * conv(ims, ntk, im1Idx, im2Idx, l, iconv1 + ii1,
+                                 jconv1 + jj1, iconv2 + ii2, jconv2 + jj2);
+            }
           }
         }
       }

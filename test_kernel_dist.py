@@ -5,8 +5,8 @@ np.random.seed(43)
 x = np.random.rand(5, 28, 28, 1).astype(np.float64)
 # model = [{'npatch': 3, 'subsampling': 2, 'sigma': 0.65},
 #          {'npatch': 3, 'subsampling': 5, 'sigma': 0.65}]
-model = [{'npatch': 3, 'subsampling': 2, 'kernel': 'relu'},
-         {'npatch': 3, 'subsampling': 5, 'kernel': 'relu'}]
+model = [{'npatch': 3, 'subsampling': 2, 'kernel': 'relu', 'pooling': 'gaussian'},
+        {'npatch': 3, 'subsampling': 5, 'kernel': 'relu', 'pooling': 'gaussian'}]
 im_ref = np.ascontiguousarray(x[0])
 ims = x[1:]
 
