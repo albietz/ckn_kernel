@@ -90,7 +90,7 @@ def compute_dist_to_ref(im_ref, ims, model, ntk=False):
 
 
 @cython.boundscheck(False)
-def compute_kernel_matrix(ims1, ims2=None, model=None, ntk=False):
+def compute_kernel_matrix(ims1, ims2=None, model=None, ntk=False, verbose=False):
     cdef bool sym = False
     if ims2 is None:
         ims2 = ims1
@@ -101,6 +101,7 @@ def compute_kernel_matrix(ims1, ims2=None, model=None, ntk=False):
     # assert np.all(ims1.shape[1:] == ims2[1:].shape), '{} vs {}'.format(ims1.shape[1:], ims2.shape[1:])
 
     cdef bool ntk_ = ntk
+    cdef bool verbose_ = verbose
     cdef vector[size_t] patch_sizes = [l['npatch'] for l in model]
     cdef vector[size_t] subs = [l['subsampling'] for l in model]
     cdef vector[int] kernel_types = [to_kernel_type[l.get('kernel', 'relu' if ntk else 'exp')] for l in model]
@@ -118,7 +119,8 @@ def compute_kernel_matrix(ims1, ims2=None, model=None, ntk=False):
         n = j % N2
         if not sym or m <= n:  # skip symmetric entries
             k[m, n] = computeKernel[double](&x1[m,0], &x2[n,0], ntk_, h, w, c,
-                                         patch_sizes, subs, kernel_types, kernel_params, pools)
+                                         patch_sizes, subs, kernel_types, kernel_params, pools,
+                                         verbose_)
 
     if sym:  # fill symmetric entries
         for m in range(N1):

@@ -11,6 +11,7 @@ setup(
         language='c++',
         include_dirs=[numpy.get_include()],
         extra_compile_args=['-std=c++11', '-fopenmp'],
-        extra_link_args=['-std=c++11', '-fopenmp', '-lglog'],
+        # extra_link_args=['-std=c++11', '-fopenmp', '-lglog'],
+        extra_link_args=['-std=c++11', '-fopenmp'],
         )])
 )

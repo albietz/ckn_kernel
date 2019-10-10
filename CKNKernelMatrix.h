@@ -1,5 +1,7 @@
+#include <cassert>
 #include <cmath>
-#include <glog/logging.h>
+// #include <glog/logging.h>
+#include <iostream>
 #include <sstream>
 #include <vector>
 #include <unordered_map>
@@ -83,9 +85,10 @@ template <typename Double>
 class CKNKernelMatrix {
  public:
   CKNKernelMatrix(const std::vector<LayerParams> &layers, const size_t h,
-                  const size_t w, const size_t c)
-      : layers_(layers), h_(h), w_(w), c_(c) {
-    CHECK(h == w) << "only square images are supported for now";
+                  const size_t w, const size_t c, const bool verbose = false)
+      : layers_(layers), h_(h), w_(w), c_(c), verbose_(verbose) {
+    // CHECK(h == w) << "only square images are supported for now";
+    assert(h == w);
     layerDims_.resize(layers.size());
     layerDims_[0].hi = h;
     layerDims_[0].wi = w;
@@ -101,7 +104,8 @@ class CKNKernelMatrix {
         dims.hconv = dims.hi;
         dims.wconv = dims.wi;
       } else {
-        CHECK_GE(dims.hi, patch);
+        // CHECK_GE(dims.hi, patch);
+        assert(dims.hi >= patch);
         dims.hconv = dims.hi - patch + 1;
         dims.wconv = dims.wi - patch + 1;
       }
@@ -110,13 +114,17 @@ class CKNKernelMatrix {
       poolFilter_.emplace_back(makeFilter(dims.poolSize, layers_[l].poolType));
 
       // sample at sub * i, with i = 1..hpool
-      CHECK_GE(dims.hconv, sub) << "too large subsampling";
+      // CHECK_GE(dims.hconv, sub) << "too large subsampling";
+      assert(dims.hconv >= sub);
       dims.hpool = dims.hconv / sub - 1;
       dims.wpool = dims.wconv / sub - 1;
-      LOG(INFO) << "layer " << l << "(" << patch << "," << sub
-                << "): " << dims.hi << "x" << dims.wi << " -> " << dims.hconv
-                << "x" << dims.wconv << " -> " << dims.hpool << "x"
-                << dims.wpool;
+      if (verbose_) {
+        // LOG(INFO) << "layer " << l << "(" << patch << "," << sub
+        std::cerr << "layer " << l << "(" << patch << "," << sub
+                  << "): " << dims.hi << "x" << dims.wi << " -> " << dims.hconv
+                  << "x" << dims.wconv << " -> " << dims.hpool << "x"
+                  << dims.wpool;
+      }
     }
   }
 
@@ -153,11 +161,17 @@ private:
         if (poolType == GAUSSIAN) {
           f = std::exp(-(i * i + j * j) / (2 * sigma * sigma));
         } else if (poolType == AVERAGE) {
-          f = 1.0;
+          // f = (std::abs(i) <= 1 && std::abs(j) <= 1) ? 1.0 : 0.0;
+          if (i >= -1 && i <= 0 && j >= -1 && j <= 0) {
+            f = 1.0;
+          } else {
+            f = 0.0;
+          }
         } else if (poolType == STRIDED) {
           f = (i == 0 && j == 0) ? 1.0 : 0.0;
         } else {
-          LOG(FATAL) << "bad pool type";
+          // LOG(FATAL) << "bad pool type";
+          std::cerr << "bad pool type";
         }
         sum += f;
       }
@@ -174,7 +188,7 @@ private:
   Double pool(const std::vector<const Double *> &ims, const bool ntk, const uint8_t im1Idx,
               const uint8_t im2Idx, const int32_t l, const size_t i1,
               const size_t j1, const size_t i2, const size_t j2) {
-    CHECK_GE(l, -1);
+    /* CHECK_GE(l, -1);
     if (l >= 0) {
       CHECK_GE(i1, 0);
       CHECK_LT(i1, layerDims_[l].hpool);
@@ -193,7 +207,7 @@ private:
       CHECK_LT(i2, h_);
       CHECK_GE(j2, 0);
       CHECK_LT(j2, w_);
-    }
+    } */
 
     auto key = KeyT(ntk, im1Idx, im2Idx, l, i1, j1, i2, j2);
     auto pos = poolMap_.find(key);
@@ -243,7 +257,8 @@ private:
     }
 
     if (pos != poolMap_.end() && std::abs(pos->second - val) > 1e-5) {
-      LOG_EVERY_N(ERROR, 10000) << pos->second << " vs " << val << ": " << im1Idx << im2Idx << l;
+      // LOG_EVERY_N(ERROR, 10000) << pos->second << " vs " << val << ": " << im1Idx << im2Idx << l;
+      std::cerr << pos->second << " vs " << val << ": " << im1Idx << im2Idx << l;
     }
     if (useDP) {
       return poolMap_[key] = val;
@@ -256,11 +271,12 @@ private:
   Double conv(const std::vector<const Double *> &ims, const bool ntk, const uint8_t im1Idx,
               const uint8_t im2Idx, const int32_t l, const size_t i1,
               const size_t j1, const size_t i2, const size_t j2) {
-    CHECK_GE(l, 0);
+    /* CHECK_GE(l, 0);
     CHECK_GE(i1, 0); CHECK_LT(i1, layerDims_[l].hconv);
     CHECK_GE(j1, 0); CHECK_LT(j1, layerDims_[l].wconv);
     CHECK_GE(i2, 0); CHECK_LT(i2, layerDims_[l].hconv);
     CHECK_GE(j2, 0); CHECK_LT(j2, layerDims_[l].wconv);
+    */
     auto key = KeyT(ntk, im1Idx, im2Idx, l, i1, j1, i2, j2);
     auto pos = convMap_.find(key);
     if (pos != convMap_.end()) {
@@ -288,7 +304,8 @@ private:
     }
 
     if (pos != convMap_.end() && std::abs(pos->second - val) > 1e-5) {
-      LOG_EVERY_N(ERROR, 10000) << pos->second << " vs " << val << ": " << im1Idx << im2Idx << l;
+      // LOG_EVERY_N(ERROR, 10000) << pos->second << " vs " << val << ": " << im1Idx << im2Idx << l;
+      std::cerr << pos->second << " vs " << val << ": " << im1Idx << im2Idx << l;
     }
     if (useDP) {
       return convMap_[key] = val;
@@ -301,11 +318,12 @@ private:
   Double prod(const std::vector<const Double *> &ims, const bool ntk, const uint8_t im1Idx,
               const uint8_t im2Idx, const int32_t l, const size_t i1,
               const size_t j1, const size_t i2, const size_t j2) {
-    CHECK_GE(l, 0);
+    /* CHECK_GE(l, 0);
     CHECK_GE(i1, 0); CHECK_LT(i1, layerDims_[l].hi);
     CHECK_GE(j1, 0); CHECK_LT(j1, layerDims_[l].wi);
     CHECK_GE(i2, 0); CHECK_LT(i2, layerDims_[l].hi);
     CHECK_GE(j2, 0); CHECK_LT(j2, layerDims_[l].wi);
+    */
     auto key = KeyT(ntk, im1Idx, im2Idx, l, i1, j1, i2, j2);
     auto pos = prodMap_.find(key);
     if (pos != prodMap_.end()) {
@@ -328,7 +346,8 @@ private:
     val /= (sz * sz);
 
     if (pos != prodMap_.end() && std::abs(pos->second - val) > 1e-5) {
-      LOG_EVERY_N(ERROR, 10000) << pos->second << " vs " << val << ": " << im1Idx << im2Idx << l;
+      // LOG_EVERY_N(ERROR, 10000) << pos->second << " vs " << val << ": " << im1Idx << im2Idx << l;
+      std::cerr << pos->second << " vs " << val << ": " << im1Idx << im2Idx << l;
     }
     if (useDP) {
       return prodMap_[key] = val;
@@ -357,7 +376,8 @@ private:
         return 1. - std::acos(cosine) / PI;
       }
     } else {
-      LOG(ERROR) << "undefined kernel type";
+      // LOG(ERROR) << "undefined kernel type";
+      std::cerr << "undefined kernel type";
       return 0.;
     }
   }
@@ -366,6 +386,7 @@ private:
   const size_t h_;
   const size_t w_;
   const size_t c_;
+  const bool verbose_;
 
   struct LayerDims {
     size_t hi;
@@ -398,13 +419,14 @@ Double computeKernel(const Double *const im1, const Double *const im2,
                      const std::vector<size_t>& subs,
                      const std::vector<int>& kernelTypes,
                      const std::vector<double>& kernelParams,
-                     const std::vector<int>& pools) {
+                     const std::vector<int>& pools,
+                     const bool verbose = false) {
   std::vector<LayerParams> layers;
   for (size_t i = 0; i < patchSizes.size(); ++i) {
     layers.push_back({patchSizes[i], subs[i], static_cast<KernelType>(kernelTypes[i]),
                       kernelParams[i], /*zeroPad=*/true, static_cast<PoolType>(pools[i])});
   }
 
-  CKNKernelMatrix<Double> kernel(layers, h, w, c);
+  CKNKernelMatrix<Double> kernel(layers, h, w, c, verbose);
   return kernel.computeKernel(im1, im2, ntk);
 }
