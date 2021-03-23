@@ -2,15 +2,46 @@ from distutils.core import setup
 from distutils.extension import Extension
 from Cython.Build import cythonize
 import numpy
+import os
 
+eigen_dir = os.path.join('include', 'Eigen')
+if not os.path.exists(eigen_dir):
+    print('Downloading Eigen...')
+
+    from glob import glob
+    # from urllib.request import urlretrieve
+    import requests
+    import shutil
+    import tarfile
+
+    if not os.path.exists('include'):
+        os.mkdir('include')
+    eigen_url = 'https://gitlab.com/libeigen/eigen/-/archive/3.3.9/eigen-3.3.9.tar.gz'
+    tar_path = os.path.join('include', 'Eigen.tar.gz')
+    r = requests.get(eigen_url)
+    with open(tar_path, 'wb') as outfile:
+        outfile.write(r.content)
+    # urlretrieve(eigen_url, tar_path)
+    with tarfile.open(tar_path, 'r') as tar:
+        tar.extractall('include')
+    thedir = glob(os.path.join('include', 'eigen-*'))[0]
+    shutil.move(os.path.join(thedir, 'Eigen'), eigen_dir)
+    shutil.move(os.path.join(thedir, 'unsupported'), os.path.join('include', 'unsupported'))
+    print('done!')
+
+
+libs = ['mkl_sequential', 'mkl_core', 'mkl_intel_lp64', 'iomp5']
+# libs = ['mkl_rt', 'iomp5']
+conda_include = os.path.join(os.environ['CONDA_PREFIX'], 'include')
 setup(
     name = 'ckn_kernel',
     ext_modules = cythonize([Extension(
         'ckn_kernel',
         ['ckn_kernel.pyx'],
         language='c++',
-        include_dirs=[numpy.get_include()],
-        extra_compile_args=['-std=c++11', '-fopenmp'],
-        extra_link_args=['-std=c++11', '-fopenmp', '-lglog'],
+        libraries=libs,
+        include_dirs=[conda_include, numpy.get_include(), 'include'],
+        # extra_compile_args=['-std=c++11', '-DEIGEN_USE_MKL_ALL', '-DAXPBY', '-fopenmp']
+        extra_compile_args=['-std=c++11', '-DAXPBY', '-fopenmp']
         )])
 )
