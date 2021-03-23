@@ -1,12 +1,12 @@
 # Convolutional kernel computation (CKN, NTK)
 
-Package for computing exact kernel evaluations for some convolutional kernels, such as those from convolutional kernel networks (CKNs, see [here](https://arxiv.org/abs/1406.3332), [here](https://arxiv.org/abs/1605.06265), [here](http://jmlr.org/papers/v20/18-190.html)) and neural tangent kernels for convolutional networks (NTK or CNTK, see [here](https://arxiv.org/abs/1806.07572), [here](https://arxiv.org/abs/1905.12173), [here](https://arxiv.org/abs/1904.11955)).
-The main code is in C++, with Cython bindings.
+Package for computing exact kernel evaluations for some convolutional kernels, such as those from convolutional kernel networks (CKNs, see [here](https://arxiv.org/abs/1406.3332), [here](https://arxiv.org/abs/1605.06265), [here](http://jmlr.org/papers/v20/18-190.html), [here](https://arxiv.org/abs/2102.10032)) and neural tangent kernels for convolutional networks (NTK or CNTK, see [here](https://arxiv.org/abs/1806.07572), [here](https://arxiv.org/abs/1905.12173), [here](https://arxiv.org/abs/1904.11955)).
+The main code is in C++ and Eigen, with Cython bindings.
 
 
 ## Compilation
 
-The compilation requires Cython and glog (`sudo apt-get install libgoogle-glog-dev`). You can compile the python package with the following command:
+The compilation requires Cython and Eigen (the latter will be downloaded automatically upon installation). You can compile the python package with the following command:
 
 ```
 python setup.py build_ext -if
@@ -55,8 +55,10 @@ For pooling, the options are `gaussian`, `average` or `strided`, where the latte
 
 ## Papers
 
-The papers to cite are the following (first one for CKN, second one for NTK):
+The papers to cite are the following (first and third for CKN, second one for NTK):
 
 A. Bietti, J. Mairal. [Group Invariance, Stability to Deformations, and Complexity of Deep Convolutional Representations](http://jmlr.org/papers/v20/18-190.html). JMLR, 2019.
 
-A. Bietti, J. Mairal. [On the Inductive Bias of Neural Tangent Kernels](https://arxiv.org/abs/1905.12173). arXiv, 2019.
+A. Bietti, J. Mairal. [On the Inductive Bias of Neural Tangent Kernels](https://arxiv.org/abs/1905.12173). NeurIPS, 2019.
+
+A. Bietti. [On Approximation in Deep Convolutional Networks: a Kernel Perspective](https://arxiv.org/abs/2102.10032). arXiv, 2021.
