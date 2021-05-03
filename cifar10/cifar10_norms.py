@@ -12,7 +12,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_xtr', default='data/cifar10_data/cifar_white_xtrain.npy')
     parser.add_argument('--data_xte', default='data/cifar10_data/cifar_white_xtest.npy')
     parser.add_argument('--results_dir', default='data/cifar10_ckn_matrix')
-    parser.add_argument('--model', default='exp_pool')
+    parser.add_argument('--model', default='exp_sigma_06_pool')
     parser.add_argument('--block_size', type=int, default=500)
     args = parser.parse_args()
 

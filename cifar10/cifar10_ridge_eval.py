@@ -36,7 +36,7 @@ def load_matrix(outdir, ntrain, ntest=10000, train_only=False, no_save=False):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='compute cifar10 kernel matrix')
     parser.add_argument('--results_dir', default='data/cifar10_ckn_matrix')
-    parser.add_argument('--model', default='exp_strided')
+    parser.add_argument('--model', default='exp_sigma_06_pool')
     parser.add_argument('--more_models', default='', help='list of models and weights model1:w1,model2:w2')
     parser.add_argument('--Ntrain', type=int, default=50000)
     parser.add_argument('--Ntest', type=int, default=10000)

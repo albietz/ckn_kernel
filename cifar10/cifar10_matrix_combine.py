@@ -9,7 +9,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='compute cifar10 kernel matrix')
     parser.add_argument('--sub_block_size', type=int, default=100)
     parser.add_argument('--results_dir', default='data/cifar10_ckn_matrix')
-    parser.add_argument('--model', default='exp_strided')
+    parser.add_argument('--model', default='exp_sigma_06_pool')
     parser.add_argument('--Ntrain', type=int, default=50000)
     parser.add_argument('--Ntest', type=int, default=10000)
     parser.add_argument('--remove_nans', action='store_true', help='remove files with NaNs')

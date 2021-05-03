@@ -192,7 +192,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_xtr', default='data/cifar10_data/cifar_white_xtrain.npy')
     parser.add_argument('--data_xte', default='data/cifar10_data/cifar_white_xtest.npy')
     parser.add_argument('--results_dir', default='data/cifar10_ckn_matrix')
-    parser.add_argument('--model', default='exp_strided')
+    parser.add_argument('--model', default='exp_sigma_06_pool')
     parser.add_argument('--overwrite', action='store_true', help='overwrite files, even if they exist')
     parser.add_argument('--interactive', action='store_true', help='compute only, do not store')
     parser.add_argument('--compute_norms', action='store_true', help='compute own patch norms instead of loading')
